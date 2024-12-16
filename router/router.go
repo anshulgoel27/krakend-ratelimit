@@ -18,8 +18,8 @@ import (
 // Namespace is the key to use to store and access the custom config data for the router
 const Namespace = "qos/ratelimit/router"
 
-// Config is the custom config struct containing the params for the router middlewares
-type Config struct {
+// RateLimitingConfig is the custom config struct containing the params for the router middlewares
+type RateLimitingConfig struct {
 	MaxRate        float64       `json:"max_rate"`
 	Capacity       uint64        `json:"capacity"`
 	Strategy       string        `json:"strategy"`
@@ -32,27 +32,85 @@ type Config struct {
 	CleanUpThreads uint64        `json:"cleanup_threads"`
 }
 
-// ZeroCfg is the zero value for the Config struct
-var ZeroCfg = Config{}
+const Namespace_Triered = "qos/ratelimit/tiered"
+
+type TieredRateLimitConfig struct {
+	TierKey string `json:"tier_key"` // The header name containing the tier name
+	Tiers   []Tier `json:"tiers"`    // The list of all tier definitions and limits
+}
+
+type Tier struct {
+	RateLimit RateLimitingConfig `json:"ratelimit"`  // The rate limit definition
+	TierValue string             `json:"tier_value"` // The tier name
+}
+
+// RateLimitingZeroCfg is the zero value for the Config struct
+var RateLimitingZeroCfg = RateLimitingConfig{}
+var TieredRateLimitingZeroCfg = TieredRateLimitConfig{}
 
 var (
 	ErrNoExtraCfg    = errors.New("no extra config")
 	ErrWrongExtraCfg = errors.New("wrong extra config")
 )
 
-// ConfigGetter parses the extra config for the rate adapter and
-// returns a ZeroCfg and an error if something goes wrong.
-func ConfigGetter(e config.ExtraConfig) (Config, error) {
-	v, ok := e[Namespace]
+func TieredRateLimtingConfigGetter(e config.ExtraConfig) (TieredRateLimitConfig, error) {
+	v, ok := e[Namespace_Triered]
 	if !ok {
-		return ZeroCfg, ErrNoExtraCfg
+		return TieredRateLimitingZeroCfg, ErrNoExtraCfg
 	}
 	tmp, ok := v.(map[string]interface{})
 	if !ok {
-		return ZeroCfg, ErrWrongExtraCfg
+		return TieredRateLimitingZeroCfg, ErrWrongExtraCfg
 	}
-	cfg := Config{}
-	if v, ok := tmp["max_rate"]; ok {
+
+	return ConstructTieredRateLimitConfig(tmp), nil
+}
+
+// ConstructTieredRateLimitConfig builds the complete tiered rate limiting configuration
+func ConstructTieredRateLimitConfig(config map[string]interface{}) TieredRateLimitConfig {
+	cfg := TieredRateLimitConfig{}
+
+	// TierKey: Header name that contains the tier name
+	if v, ok := config["tier_key"]; ok {
+		cfg.TierKey = fmt.Sprintf("%v", v)
+	}
+
+	// Tiers: List of all tier definitions
+	if v, ok := config["tiers"]; ok {
+		tiersConfig, ok := v.([]interface{})
+		if ok {
+			for _, tierCfg := range tiersConfig {
+				// Convert each tier config into a Tier struct
+				tierConfig := tierCfg.(map[string]interface{})
+				cfg.Tiers = append(cfg.Tiers, ConstructTierRateLimitingConfig(tierConfig))
+			}
+		}
+	}
+
+	// Return the constructed tiered rate limiting config
+	return cfg
+}
+
+func ConstructTierRateLimitingConfig(config map[string]interface{}) Tier {
+	tier := Tier{}
+
+	// RateLimit Configuration for the Tier
+	if v, ok := config["ratelimit"]; ok {
+		tier.RateLimit = ConstructRateLimtingConfig(v.(map[string]interface{})) // Use the existing function to construct rate limit config
+	}
+
+	// TierValue: can be a literal or policy expression
+	if v, ok := config["tier_value"]; ok {
+		tier.TierValue = fmt.Sprintf("%v", v)
+	}
+
+	// Return the constructed tier object
+	return tier
+}
+
+func ConstructRateLimtingConfig(config map[string]interface{}) RateLimitingConfig {
+	cfg := RateLimitingConfig{}
+	if v, ok := config["max_rate"]; ok {
 		switch val := v.(type) {
 		case int64:
 			cfg.MaxRate = float64(val)
@@ -62,7 +120,7 @@ func ConfigGetter(e config.ExtraConfig) (Config, error) {
 			cfg.MaxRate = val
 		}
 	}
-	if v, ok := tmp["capacity"]; ok {
+	if v, ok := config["capacity"]; ok {
 		switch val := v.(type) {
 		case int64:
 			cfg.Capacity = uint64(val)
@@ -72,10 +130,10 @@ func ConfigGetter(e config.ExtraConfig) (Config, error) {
 			cfg.Capacity = uint64(val)
 		}
 	}
-	if v, ok := tmp["strategy"]; ok {
+	if v, ok := config["strategy"]; ok {
 		cfg.Strategy = fmt.Sprintf("%v", v)
 	}
-	if v, ok := tmp["client_max_rate"]; ok {
+	if v, ok := config["client_max_rate"]; ok {
 		switch val := v.(type) {
 		case int64:
 			cfg.ClientMaxRate = float64(val)
@@ -85,7 +143,7 @@ func ConfigGetter(e config.ExtraConfig) (Config, error) {
 			cfg.ClientMaxRate = val
 		}
 	}
-	if v, ok := tmp["client_capacity"]; ok {
+	if v, ok := config["client_capacity"]; ok {
 		switch val := v.(type) {
 		case int64:
 			cfg.ClientCapacity = uint64(val)
@@ -95,12 +153,12 @@ func ConfigGetter(e config.ExtraConfig) (Config, error) {
 			cfg.ClientCapacity = uint64(val)
 		}
 	}
-	if v, ok := tmp["key"]; ok {
+	if v, ok := config["key"]; ok {
 		cfg.Key = fmt.Sprintf("%v", v)
 	}
 
 	cfg.TTL = krakendrate.DataTTL
-	if v, ok := tmp["every"]; ok {
+	if v, ok := config["every"]; ok {
 		every, err := time.ParseDuration(fmt.Sprintf("%v", v))
 		if err != nil || every < time.Second {
 			every = time.Second
@@ -116,7 +174,7 @@ func ConfigGetter(e config.ExtraConfig) (Config, error) {
 		}
 	}
 	cfg.NumShards = krakendrate.DefaultShards
-	if v, ok := tmp["num_shards"]; ok {
+	if v, ok := config["num_shards"]; ok {
 		switch val := v.(type) {
 		case int64:
 			cfg.NumShards = uint64(val)
@@ -127,7 +185,7 @@ func ConfigGetter(e config.ExtraConfig) (Config, error) {
 		}
 	}
 	cfg.CleanUpPeriod = time.Minute
-	if v, ok := tmp["cleanup_period"]; ok {
+	if v, ok := config["cleanup_period"]; ok {
 		cr, err := time.ParseDuration(fmt.Sprintf("%v", v))
 		if err != nil {
 			cr = time.Minute
@@ -139,7 +197,7 @@ func ConfigGetter(e config.ExtraConfig) (Config, error) {
 		cfg.CleanUpPeriod = cr
 	}
 	cfg.CleanUpThreads = 1
-	if v, ok := tmp["cleanup_threads"]; ok {
+	if v, ok := config["cleanup_threads"]; ok {
 		switch val := v.(type) {
 		case int64:
 			cfg.CleanUpThreads = uint64(val)
@@ -150,5 +208,19 @@ func ConfigGetter(e config.ExtraConfig) (Config, error) {
 		}
 	}
 
-	return cfg, nil
+	return cfg
+}
+
+// RateLimtingConfigGetter parses the extra config for the rate adapter and
+// returns a ZeroCfg and an error if something goes wrong.
+func RateLimtingConfigGetter(e config.ExtraConfig) (RateLimitingConfig, error) {
+	v, ok := e[Namespace]
+	if !ok {
+		return RateLimitingZeroCfg, ErrNoExtraCfg
+	}
+	tmp, ok := v.(map[string]interface{})
+	if !ok {
+		return RateLimitingZeroCfg, ErrWrongExtraCfg
+	}
+	return ConstructRateLimtingConfig(tmp), nil
 }

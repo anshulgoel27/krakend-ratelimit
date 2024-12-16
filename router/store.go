@@ -6,7 +6,7 @@ import (
 	krakendrate "github.com/krakendio/krakend-ratelimit/v3"
 )
 
-func StoreFromCfg(cfg Config) krakendrate.LimiterStore {
+func StoreFromCfg(cfg RateLimitingConfig) krakendrate.LimiterStore {
 	ctx := context.Background()
 	var storeBackend krakendrate.Backend
 	if cfg.NumShards > 1 {

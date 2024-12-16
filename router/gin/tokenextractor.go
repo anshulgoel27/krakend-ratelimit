@@ -46,7 +46,7 @@ func ParamTokenExtractor(param string) TokenExtractor {
 }
 
 // TokenExtractorFromCfg selects the token extractor to use from the input config
-func TokenExtractorFromCfg(cfg router.Config) (TokenExtractor, error) {
+func TokenExtractorFromCfg(cfg router.RateLimitingConfig) (TokenExtractor, error) {
 	switch strategy := strings.ToLower(cfg.Strategy); strategy {
 	case "ip":
 		return NewIPTokenExtractor(cfg.Key), nil
@@ -57,6 +57,4 @@ func TokenExtractorFromCfg(cfg router.Config) (TokenExtractor, error) {
 	default:
 		return nil, ErrNotFound
 	}
-
-	return nil, ErrNotFound
 }

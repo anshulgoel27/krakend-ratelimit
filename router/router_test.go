@@ -19,7 +19,7 @@ func TestConfigGetter(t *testing.T) {
 	if err := json.Unmarshal(serializedCfg, &dat); err != nil {
 		t.Error(err.Error())
 	}
-	cfg, err := ConfigGetter(dat)
+	cfg, err := RateLimtingConfigGetter(dat)
 	if cfg.MaxRate != 5 {
 		t.Errorf("wrong value for MaxRate. Want: 5, have: %f", cfg.MaxRate)
 	}
