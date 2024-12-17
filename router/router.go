@@ -16,7 +16,7 @@ import (
 )
 
 // Namespace is the key to use to store and access the custom config data for the router
-const Namespace = "qos/ratelimit/router"
+const Namespace = "github_com/anshulgoel27/krakend-ratelimit/router"
 
 // RateLimitingConfig is the custom config struct containing the params for the router middlewares
 type RateLimitingConfig struct {
@@ -32,7 +32,7 @@ type RateLimitingConfig struct {
 	CleanUpThreads uint64        `json:"cleanup_threads"`
 }
 
-const Namespace_Triered = "qos/ratelimit/tiered"
+const Namespace_Triered = "github_com/anshulgoel27/krakend-ratelimit/tiered"
 
 type TieredRateLimitConfig struct {
 	TierKey string `json:"tier_key"` // The header name containing the tier name
