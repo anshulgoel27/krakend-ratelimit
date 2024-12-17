@@ -3,7 +3,7 @@ package router
 import (
 	"context"
 
-	krakendrate "github.com/krakendio/krakend-ratelimit/v3"
+	krakendrate "github.com/anshulgoel27/krakend-ratelimit/v3"
 )
 
 func StoreFromCfg(cfg RateLimitingConfig) krakendrate.LimiterStore {
