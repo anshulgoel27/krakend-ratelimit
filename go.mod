@@ -1,4 +1,4 @@
-module github.com/krakendio/krakend-ratelimit/v3
+module github.com/anshulgoel27/krakend-ratelimit/v3
 
 go 1.22
 
