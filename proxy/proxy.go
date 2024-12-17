@@ -1,36 +1,3 @@
-/*
-Package proxy provides a rate-limit proxy middleware.
-
-Sample backend extra config
-
-	...
-	"extra_config": {
-		...
-		"github.com/devopsfaith/krakend-ratelimit/rate/proxy": {
-			"max_rate": 100,
-			"capacity": 100
-		},
-		...
-	},
-	...
-
-Adding the middleware to your proxy stack
-
-	import ratelimitproxy "github.com/krakendio/krakend-ratelimit/v3/proxy"
-
-	...
-
-	var p proxy.Proxy
-	var backend *config.Backend
-
-	...
-
-	p = ratelimitproxy.NewMiddleware(backend)(p)
-
-	...
-
-The ratelimit package provides an efficient token bucket implementation. See http://en.wikipedia.org/wiki/Token_bucket for more details.
-*/
 package proxy
 
 import (
