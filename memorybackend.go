@@ -79,10 +79,22 @@ func manageEvictions(ctx context.Context, ttl, cleanupRate time.Duration, backen
 				// to delete, and the actual deletion, another thread could have
 				// hit one of the keys to delete.
 				backends[idx].mu.Lock()
-				for k, v := range backends[idx].lastAccess {
-					if v.Add(ttl).Before(now) {
-						delete(backends[idx].data, k)
-						delete(backends[idx].lastAccess, k)
+				if ttl == 24*time.Hour {
+					startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+					expiryThreshold := startOfDay.Add(ttl)
+
+					for k, v := range backends[idx].lastAccess {
+						if v.Before(expiryThreshold) {
+							delete(backends[idx].data, k)
+							delete(backends[idx].lastAccess, k)
+						}
+					}
+				} else {
+					for k, v := range backends[idx].lastAccess {
+						if v.Add(ttl).Before(now) {
+							delete(backends[idx].data, k)
+							delete(backends[idx].lastAccess, k)
+						}
 					}
 				}
 				backends[idx].mu.Unlock()
@@ -94,7 +106,7 @@ func manageEvictions(ctx context.Context, ttl, cleanupRate time.Duration, backen
 // Load implements the Backend interface.
 // The f function should always return a non nil value, or that nil value
 // will be assigned and returned on load.
-func (m *MemoryBackend) Load(key string, f func() interface{}) interface{} {
+func (m *MemoryBackend) Load(key string, ttl time.Duration, f func() interface{}) interface{} {
 	var lastAccess time.Time
 	lastAccessOk := true
 
