@@ -106,7 +106,7 @@ func manageEvictions(ctx context.Context, ttl, cleanupRate time.Duration, backen
 // Load implements the Backend interface.
 // The f function should always return a non nil value, or that nil value
 // will be assigned and returned on load.
-func (m *MemoryBackend) Load(key string, ttl time.Duration, f func() interface{}) interface{} {
+func (m *MemoryBackend) Load(key string, f func() interface{}) interface{} {
 	var lastAccess time.Time
 	lastAccessOk := true
 
