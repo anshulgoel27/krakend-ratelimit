@@ -33,3 +33,9 @@ func NewLimiterFromBackendAndBuilder(backend Backend, limiterBuilder LimiterBuil
 		return backend.Load(strToken, limiterBuilder).(Limiter)
 	}
 }
+
+func NewLimiterFromBackend(backend Backend) LimiterStore {
+	return func(strToken string) Limiter {
+		return backend.Load(strToken, nil).(Limiter)
+	}
+}

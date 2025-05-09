@@ -180,6 +180,9 @@ func ConstructRateLimtingConfig(config map[string]interface{}) RateLimitingConfi
 		cfg.MaxRate = cfg.MaxRate * factor
 		cfg.ClientMaxRate = cfg.ClientMaxRate * factor
 
+		if every == 24*time.Hour {
+			cfg.TTL = every
+		}
 		if every > cfg.TTL {
 			// we do not need crypto strength random number to generate some
 			// jitter in the duration, so we mark it to skipcq the check:

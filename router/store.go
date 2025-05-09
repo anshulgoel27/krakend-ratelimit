@@ -17,8 +17,8 @@ func StoreFromCfg(cfg RateLimitingConfig, redisConfig *krakendrate.RedisConfig) 
 		if err != nil {
 			log.Printf("Redis connection failed for %s: %v. Falling back to memory backend.", cfg.RedisConnectionName, err)
 		} else {
-			redisBackend := krakendrate.RedisBackendBuilder(client, int(cfg.ClientMaxRate), cfg.TTL)
-			return krakendrate.NewLimiterFromBackendAndBuilder(redisBackend, nil)
+			redisBackend := krakendrate.RedisBackendBuilder(client, int(cfg.ClientCapacity), cfg.TTL)
+			return krakendrate.NewLimiterFromBackend(redisBackend)
 		}
 	}
 
