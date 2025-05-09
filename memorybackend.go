@@ -79,22 +79,10 @@ func manageEvictions(ctx context.Context, ttl, cleanupRate time.Duration, backen
 				// to delete, and the actual deletion, another thread could have
 				// hit one of the keys to delete.
 				backends[idx].mu.Lock()
-				if ttl == 24*time.Hour {
-					startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-					expiryThreshold := startOfDay.Add(ttl)
-
-					for k, v := range backends[idx].lastAccess {
-						if v.Before(expiryThreshold) {
-							delete(backends[idx].data, k)
-							delete(backends[idx].lastAccess, k)
-						}
-					}
-				} else {
-					for k, v := range backends[idx].lastAccess {
-						if v.Add(ttl).Before(now) {
-							delete(backends[idx].data, k)
-							delete(backends[idx].lastAccess, k)
-						}
+				for k, v := range backends[idx].lastAccess {
+					if v.Add(ttl).Before(now) {
+						delete(backends[idx].data, k)
+						delete(backends[idx].lastAccess, k)
 					}
 				}
 				backends[idx].mu.Unlock()

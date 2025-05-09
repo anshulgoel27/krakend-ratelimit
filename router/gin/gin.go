@@ -18,10 +18,10 @@ import (
 
 // HandlerFactory is the out-of-the-box basic ratelimit handler factory using the default krakend endpoint
 // handler for the gin router
-var HandlerFactory = NewRateLimiterMw(logging.NoOp, krakendgin.EndpointHandler)
+var HandlerFactory = NewRateLimiterMw(logging.NoOp, nil, krakendgin.EndpointHandler)
 
 // NewRateLimiterMw builds a rate limiting wrapper over the received handler factory.
-func NewRateLimiterMw(logger logging.Logger, next krakendgin.HandlerFactory) krakendgin.HandlerFactory {
+func NewRateLimiterMw(logger logging.Logger, redisConfig *krakendrate.RedisConfig, next krakendgin.HandlerFactory) krakendgin.HandlerFactory {
 	return func(remote *config.EndpointConfig, p proxy.Proxy) gin.HandlerFunc {
 		logPrefix := "[ENDPOINT: " + remote.Endpoint + "][Ratelimit]"
 		handlerFunc := next(remote, p)
@@ -38,7 +38,7 @@ func NewRateLimiterMw(logger logging.Logger, next krakendgin.HandlerFactory) kra
 	}
 }
 
-func NewTriredRateLimiterMw(logger logging.Logger, next krakendgin.HandlerFactory) krakendgin.HandlerFactory {
+func NewTriredRateLimiterMw(logger logging.Logger, redisConfig *krakendrate.RedisConfig, next krakendgin.HandlerFactory) krakendgin.HandlerFactory {
 	return func(remote *config.EndpointConfig, p proxy.Proxy) gin.HandlerFunc {
 		logPrefix := "[ENDPOINT: " + remote.Endpoint + "][TieredRatelimit]"
 		handlerFunc := next(remote, p)
@@ -51,7 +51,7 @@ func NewTriredRateLimiterMw(logger logging.Logger, next krakendgin.HandlerFactor
 			return handlerFunc
 		}
 
-		return TieredRateLimiterWrapperFromCfg(logger, logPrefix, cfg, handlerFunc)
+		return TieredRateLimiterWrapperFromCfg(logger, logPrefix, redisConfig, cfg, handlerFunc)
 	}
 }
 
@@ -61,7 +61,7 @@ type TieredLimiter struct {
 	TokenExtractor TokenExtractor
 }
 
-func TieredRateLimiterWrapperFromCfg(logger logging.Logger, logPrefix string, cfg router.TieredRateLimitConfig,
+func TieredRateLimiterWrapperFromCfg(logger logging.Logger, logPrefix string, redisConfig *krakendrate.RedisConfig, cfg router.TieredRateLimitConfig,
 	handler gin.HandlerFunc,
 ) gin.HandlerFunc {
 	if len(cfg.Tiers) <= 0 {
@@ -72,28 +72,40 @@ func TieredRateLimiterWrapperFromCfg(logger logging.Logger, logPrefix string, cf
 		return handler
 	}
 
-	limiters := map[string]*TieredLimiter{}
+	limiters := map[string][]*TieredLimiter{}
+
 	for _, tier := range cfg.Tiers {
-		if tier.TierValue != "" && tier.RateLimit.ClientMaxRate > 0 {
-			if tier.RateLimit.ClientCapacity == 0 {
-				if tier.RateLimit.MaxRate < 1 {
-					tier.RateLimit.ClientCapacity = 1
-				} else {
-					tier.RateLimit.ClientCapacity = uint64(tier.RateLimit.ClientMaxRate)
+		if tier.TierValue != "" {
+			for _, rl := range tier.RateLimits {
+				if rl.ClientMaxRate > 0 {
+					if rl.ClientCapacity == 0 {
+						if rl.MaxRate < 1 {
+							rl.ClientCapacity = 1
+						} else {
+							rl.ClientCapacity = uint64(rl.ClientMaxRate)
+						}
+					}
+
+					tokenExtractor, err := TokenExtractorFromCfg(rl)
+					if err != nil {
+						logger.Warning(logPrefix, "Unknown strategy", rl.Strategy)
+						continue // skip this limiter
+					}
+
+					logger.Debug(logPrefix,
+						fmt.Sprintf("Rate limit enabled. Strategy: %s (key: %s), MaxRate: %f, Capacity: %d",
+							rl.Strategy, rl.Key, rl.ClientMaxRate, rl.ClientCapacity))
+
+					store := router.StoreFromCfg(rl, redisConfig)
+					limiter := &TieredLimiter{
+						Store:          store,
+						TokenExtractor: tokenExtractor,
+					}
+
+					key := strings.ToLower(tier.TierValue)
+					limiters[key] = append(limiters[key], limiter)
 				}
 			}
-
-			tokenExtractor, err := TokenExtractorFromCfg(tier.RateLimit)
-			if err != nil {
-				logger.Warning(logPrefix, "Unknown strategy", tier.RateLimit.Strategy)
-				return handler
-			}
-			logger.Debug(logPrefix,
-				fmt.Sprintf("Rate limit enabled. Strategy: %s (key: %s), MaxRate: %f, Capacity: %d",
-					tier.RateLimit.Strategy, tier.RateLimit.Key, tier.RateLimit.ClientMaxRate, tier.RateLimit.ClientCapacity))
-
-			store := router.StoreFromCfg(tier.RateLimit)
-			limiters[strings.ToLower(tier.TierValue)] = &TieredLimiter{Store: store, TokenExtractor: tokenExtractor}
 		}
 	}
 
@@ -148,7 +160,7 @@ func applyClientRateLimit(logger logging.Logger, logPrefix string, cfg router.Ra
 	logger.Debug(logPrefix,
 		fmt.Sprintf("Rate limit enabled. Strategy: %s (key: %s), MaxRate: %f, Capacity: %d",
 			cfg.Strategy, cfg.Key, cfg.ClientMaxRate, cfg.ClientCapacity))
-	store := router.StoreFromCfg(cfg)
+	store := router.StoreFromCfg(cfg, nil)
 
 	return NewTokenLimiterMw(tokenExtractor, store)(handler)
 }
@@ -179,7 +191,7 @@ func NewHeaderLimiterMw(header string, maxRate float64, capacity uint64) Endpoin
 
 // NewHeaderLimiterMwFromCfg creates a token ratelimiter using the value of a header as a token
 func NewHeaderLimiterMwFromCfg(cfg router.RateLimitingConfig) EndpointMw {
-	store := router.StoreFromCfg(cfg)
+	store := router.StoreFromCfg(cfg, nil)
 	tokenExtractor := HeaderTokenExtractor(cfg.Key)
 	return NewTokenLimiterMw(tokenExtractor, store)
 }
@@ -201,7 +213,7 @@ func NewIpLimiterWithKeyMw(header string, maxRate float64, capacity uint64) Endp
 
 // NewIpLimiterWithKeyMwFromCfg creates a token ratelimiter using the IP of the request as a token
 func NewIpLimiterWithKeyMwFromCfg(cfg router.RateLimitingConfig) EndpointMw {
-	store := router.StoreFromCfg(cfg)
+	store := router.StoreFromCfg(cfg, nil)
 	tokenExtractor := NewIPTokenExtractor(cfg.Key)
 	return NewTokenLimiterMw(tokenExtractor, store)
 }
@@ -224,7 +236,7 @@ func NewTokenLimiterMw(tokenExtractor TokenExtractor, limiterStore krakendrate.L
 	}
 }
 
-func NewTieredTokenLimiterMw(tier_key_header string, limiters map[string]*TieredLimiter) EndpointMw {
+func NewTieredTokenLimiterMw(tier_key_header string, limiters map[string][]*TieredLimiter) EndpointMw {
 	return func(next gin.HandlerFunc) gin.HandlerFunc {
 		return func(c *gin.Context) {
 			tierValue := c.Request.Header.Get(tier_key_header)
@@ -233,22 +245,24 @@ func NewTieredTokenLimiterMw(tier_key_header string, limiters map[string]*Tiered
 				return
 			}
 
-			limiter, exists := limiters[tierValue]
-			if !exists {
-				c.AbortWithError(http.StatusBadRequest, fmt.Errorf("missing tier definition: %s", tierValue))
-				return
+			tierLimiters, exists := limiters[strings.ToLower(tierValue)]
+			if !exists || len(tierLimiters) == 0 {
+				next(c)
 			}
 
-			tokenKey := limiter.TokenExtractor(c)
-			if tokenKey == "" {
-				c.AbortWithError(http.StatusTooManyRequests, krakendrate.ErrLimited)
-				return
+			for _, limiter := range tierLimiters {
+				tokenKey := limiter.TokenExtractor(c)
+				if tokenKey == "" {
+					c.AbortWithError(http.StatusTooManyRequests, krakendrate.ErrLimited)
+					return
+				}
+
+				if !limiter.Store(tokenKey).Allow() {
+					c.AbortWithError(http.StatusTooManyRequests, krakendrate.ErrLimited)
+					return
+				}
 			}
 
-			if !limiter.Store(tokenKey).Allow() {
-				c.AbortWithError(http.StatusTooManyRequests, krakendrate.ErrLimited)
-				return
-			}
 			next(c)
 		}
 	}

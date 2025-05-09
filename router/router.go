@@ -20,16 +20,17 @@ const Namespace = "github_com/anshulgoel27/krakend-ratelimit/router"
 
 // RateLimitingConfig is the custom config struct containing the params for the router middlewares
 type RateLimitingConfig struct {
-	MaxRate        float64       `json:"max_rate"`
-	Capacity       uint64        `json:"capacity"`
-	Strategy       string        `json:"strategy"`
-	ClientMaxRate  float64       `json:"client_max_rate"`
-	ClientCapacity uint64        `json:"client_capacity"`
-	Key            string        `json:"key"`
-	TTL            time.Duration `json:"every"`
-	NumShards      uint64        `json:"num_shards"`
-	CleanUpPeriod  time.Duration `json:"cleanup_period"`
-	CleanUpThreads uint64        `json:"cleanup_threads"`
+	MaxRate             float64       `json:"max_rate"`
+	Capacity            uint64        `json:"capacity"`
+	Strategy            string        `json:"strategy"`
+	ClientMaxRate       float64       `json:"client_max_rate"`
+	ClientCapacity      uint64        `json:"client_capacity"`
+	Key                 string        `json:"key"`
+	TTL                 time.Duration `json:"every"`
+	NumShards           uint64        `json:"num_shards"`
+	CleanUpPeriod       time.Duration `json:"cleanup_period"`
+	CleanUpThreads      uint64        `json:"cleanup_threads"`
+	RedisConnectionName string        `json:"redis_connection_name"`
 }
 
 const Namespace_Triered = "github_com/anshulgoel27/krakend-ratelimit/tiered"
@@ -40,8 +41,8 @@ type TieredRateLimitConfig struct {
 }
 
 type Tier struct {
-	RateLimit RateLimitingConfig `json:"ratelimit"`  // The rate limit definition
-	TierValue string             `json:"tier_value"` // The tier name
+	RateLimits []RateLimitingConfig `json:"ratelimits"` // The rate limit definition
+	TierValue  string               `json:"tier_value"` // The tier name
 }
 
 // RateLimitingZeroCfg is the zero value for the Config struct
@@ -95,8 +96,16 @@ func ConstructTierRateLimitingConfig(config map[string]interface{}) Tier {
 	tier := Tier{}
 
 	// RateLimit Configuration for the Tier
-	if v, ok := config["ratelimit"]; ok {
-		tier.RateLimit = ConstructRateLimtingConfig(v.(map[string]interface{})) // Use the existing function to construct rate limit config
+	if v, ok := config["ratelimits"]; ok {
+		if arr, ok := v.([]interface{}); ok {
+			var rateLimitConfigs []RateLimitingConfig
+			for _, item := range arr {
+				if itemMap, ok := item.(map[string]interface{}); ok {
+					rateLimitConfigs = append(rateLimitConfigs, ConstructRateLimtingConfig(itemMap))
+				}
+			}
+			tier.RateLimits = rateLimitConfigs
+		}
 	}
 
 	// TierValue: can be a literal or policy expression
@@ -155,6 +164,10 @@ func ConstructRateLimtingConfig(config map[string]interface{}) RateLimitingConfi
 	}
 	if v, ok := config["key"]; ok {
 		cfg.Key = fmt.Sprintf("%v", v)
+	}
+
+	if v, ok := config["redis_connection_name"]; ok {
+		cfg.RedisConnectionName = fmt.Sprintf("%v", v)
 	}
 
 	cfg.TTL = krakendrate.DataTTL
