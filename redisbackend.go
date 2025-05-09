@@ -359,16 +359,11 @@ func (l *redisLimiter) Allow() bool {
 		}
 
 	} else {
-		var rate redis_rate.Limit
-		switch l.period {
-		case time.Second:
-			rate = redis_rate.PerSecond(l.rate)
-		case time.Minute:
-			rate = redis_rate.PerMinute(l.rate)
-		case time.Hour:
-			rate = redis_rate.PerHour(l.rate)
-		default:
-			rate = redis_rate.PerMinute(l.rate)
+
+		rate := redis_rate.Limit{
+			Rate:   l.rate, // total allowed
+			Period: l.period,
+			Burst:  l.rate, // max burst
 		}
 
 		res, err := l.limiter.Allow(context.Background(), l.key, rate)
