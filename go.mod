@@ -1,13 +1,15 @@
 module github.com/anshulgoel27/krakend-ratelimit/v3
 
-go 1.24.0
+go 1.24.3
 
 require (
-	github.com/gin-gonic/gin v1.10.0
+	github.com/gin-gonic/gin v1.10.1
 	github.com/luraproject/lura/v2 v2.10.0
 )
 
 require github.com/redis/go-redis/v9 v9.8.0
+
+require github.com/rogpeppe/go-internal v1.14.1 // indirect
 
 require (
 	github.com/bytedance/sonic v1.13.2 // indirect
@@ -34,11 +36,11 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	github.com/valyala/fastrand v1.1.0 // indirect
-	golang.org/x/arch v0.12.0 // indirect
-	golang.org/x/crypto v0.37.0 // indirect
-	golang.org/x/net v0.39.0 // indirect
-	golang.org/x/sys v0.32.0 // indirect
-	golang.org/x/text v0.24.0 // indirect
-	google.golang.org/protobuf v1.35.2 // indirect
+	golang.org/x/arch v0.17.0 // indirect
+	golang.org/x/crypto v0.38.0 // indirect
+	golang.org/x/net v0.40.0 // indirect
+	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/text v0.25.0 // indirect
+	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
