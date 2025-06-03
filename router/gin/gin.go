@@ -245,24 +245,26 @@ func NewTieredTokenLimiterMw(tier_key_header string, limiters map[string][]*Tier
 				return
 			}
 
-			tierLimiters, exists := limiters[strings.ToLower(tierValue)]
-			if !exists || len(tierLimiters) == 0 {
-				next(c)
-			}
+			for _, tierHeader := range strings.Split(tierValue, ",") {
+				tierLimiters, exists := limiters[strings.ToLower(strings.TrimSpace(tierHeader))]
+				if !exists || len(tierLimiters) == 0 {
+					continue
+				} else {
+					for _, limiter := range tierLimiters {
+						tokenKey := limiter.TokenExtractor(c)
+						if tokenKey == "" {
+							c.AbortWithError(http.StatusTooManyRequests, krakendrate.ErrLimited)
+							return
+						}
 
-			for _, limiter := range tierLimiters {
-				tokenKey := limiter.TokenExtractor(c)
-				if tokenKey == "" {
-					c.AbortWithError(http.StatusTooManyRequests, krakendrate.ErrLimited)
-					return
+						if !limiter.Store(tokenKey).Allow() {
+							c.AbortWithError(http.StatusTooManyRequests, krakendrate.ErrLimited)
+							return
+						}
+					}
+					break
 				}
-
-				if !limiter.Store(tokenKey).Allow() {
-					c.AbortWithError(http.StatusTooManyRequests, krakendrate.ErrLimited)
-					return
-				}
 			}
-
 			next(c)
 		}
 	}
