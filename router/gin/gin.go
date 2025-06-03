@@ -92,9 +92,11 @@ func TieredRateLimiterWrapperFromCfg(logger logging.Logger, logPrefix string, re
 						continue // skip this limiter
 					}
 
+					tier_key := strings.ToLower(tier.TierValue)
+
 					logger.Debug(logPrefix,
-						fmt.Sprintf("Rate limit enabled. Strategy: %s (key: %s), MaxRate: %f, Capacity: %d",
-							rl.Strategy, rl.Key, rl.ClientMaxRate, rl.ClientCapacity))
+						fmt.Sprintf("Rate limit enabled. Strategy: %s (key: %s), MaxRate: %f, Capacity: %d, Tier: %s",
+							rl.Strategy, rl.Key, rl.ClientMaxRate, rl.ClientCapacity, tier_key))
 
 					store := router.StoreFromCfg(rl, redisConfig)
 					limiter := &TieredLimiter{
@@ -102,8 +104,7 @@ func TieredRateLimiterWrapperFromCfg(logger logging.Logger, logPrefix string, re
 						TokenExtractor: tokenExtractor,
 					}
 
-					key := strings.ToLower(tier.TierValue)
-					limiters[key] = append(limiters[key], limiter)
+					limiters[tier_key] = append(limiters[tier_key], limiter)
 				}
 			}
 		}
@@ -257,7 +258,7 @@ func NewTieredTokenLimiterMw(tier_key_header string, limiters map[string][]*Tier
 							return
 						}
 
-						if !limiter.Store(tokenKey).Allow() {
+						if !limiter.Store(tierHeader + "-" + tokenKey).Allow() {
 							c.AbortWithError(http.StatusTooManyRequests, krakendrate.ErrLimited)
 							return
 						}
